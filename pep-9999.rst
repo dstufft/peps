@@ -1,6 +1,6 @@
 PEP: 9999
 Title: Upload 2.0 API for Python Package Repositories
-Author: Donald Stufft <donald@stufft.io>
+Author: Donald Stufft <donald@stufft.io>, Dustin Ingram <di@python.org>
 Status: Draft
 Type: Standards Track
 Content-Type: text/x-rst
@@ -164,17 +164,21 @@ with a payload that looks like:
           "hashes": {"sha256": "...", "blake2b": "..."},
           "metadata": "...",
         }
-      }
+      },
+      "draft": false
     }
 
 
-This currently has two keys, ``meta`` and ``files``.
+This currently has three keys, ``meta``, ``files`` and ``draft``.
 
 The ``meta`` key is included in all payloads, and it describes information about the
 payload itself.
 
 The ``files`` key is a mapping of filenames that the session will be used to upload,
 to a mapping of information about the file.
+
+The ``draft`` key is optional and defaults to ``false``. See 'Creating a Draft
+Session' below for more details on draft sessions.
 
 Each filename mapping contains the following keys:
 
@@ -237,7 +241,8 @@ that looks like:
       },
       "notices": [
         "a notice to display to the user"
-      ]
+      ],
+      "url": "... an absolute URL for the session"
     }
 
 
@@ -260,17 +265,21 @@ The ``notices`` key is an optional key that points to an array of notices that
 the server wishes to communicate to the end user that are not specific to any
 one file.
 
+The ``url`` key represents a unique and absolute URL for the session. This is
+optional for regular sessions but is required for draft sessions.
+
 For each filename in ``files`` the mapping has three keys, ``status``, ``url``,
 and ``notices``.
 
-The ``status`` key is the same as the top level ``status`` key, except that it
-indicated the status of a specific file.
+The ``files.<filename>.status`` key is the same as the top level ``status``
+key, except that it indicated the status of a specific file.
 
-The ``url`` key is the *absolute* URL that the client should upload that specific
-file to.
+The ``files.<filename>.url`` key is the *absolute* URL that the client should
+upload that specific file to.
 
-The ``notices`` key is an optionl key, that is an array of notices that the server
-wishes to communicate to the end user that are specific to this file.
+The ``files.<filename>.notices`` key is an optionl key, that is an array of
+notices that the server wishes to communicate to the end user that are specific
+to this file.
 
 The required response code to a successful creation of the session is a
 ``201 Created`` response and it **MUST** include a ``Location`` header that is the
@@ -380,8 +389,8 @@ upload the rest of the file as described above, either in a single request
 containing all of the remaining data or in multiple chunks.
 
 
-Canceling an In Progress Upload
-+++++++++++++++++++++++++++++++
+Cancel an In Progress Upload
+++++++++++++++++++++++++++++
 
 If a client wishes to cancel an upload of a specific file, for instance because
 they need to upload a different file, they may do so by issuing a ``DELETE``
@@ -392,6 +401,88 @@ Servers **MUST** reject attempts to cancel an upload after they've already
 been fully uploaded.
 
 A successful cancelation request **MUST** response with a ``204 No Content``.
+
+
+Create a Draft Session
+~~~~~~~~~~~~~~~~~~~~~~
+
+The semantics for creating a draft session is identical to creating a regular
+session, with the following exception:
+
+- the ``draft`` field is present and set to ``true``;
+
+Similarly, the server response is identical to creating a regular session, with
+the following exception:
+
+- the ``url`` field is present and represents an absolute URL for the session
+
+Draft sessions support re-uploading a file with the same filename as a file
+from a previous draft session, but with different contents. If the server
+recieves a request to create a draft session for a filename that has been
+included in a previous draft session which hasn't yet been closed, the server
+should consider the previously uploaded file to be completed regardless of the
+status of the previous upload.
+
+Servers **MAY** reuse session URLs of previous sessions, and **SHOULD** group
+session URLs based on normalized project name and version.
+
+Draft sessions must be explicitly closed before the files are published, and
+servers **SHOULD NOT** automatically publish draft sessions when all files in
+the session have been uploaded. See 'Publishing a Draft Session' below.
+
+
+List Draft Sessions
+~~~~~~~~~~~~~~~~~~~
+
+In order to determine which draft sessions the server is aware of and are
+pending publication, servers **MUST** support enumerating draft sessions. When
+enumerating draft sessions, servers should respond with all the draft sessions
+they are currently aware of at the time of the request.
+
+To list draft sessions, clients can send a ``GET`` request to ``/``. The server
+must return a response that looks like:
+
+.. code-block:: json
+
+    {
+      "meta": {
+        "api-version": "2.0"
+      },
+      "sessions": [
+        {
+          "status": "pending",
+          "url": "... an absolute URL for the session",
+          "notices": [
+            "a notice to display to the user"
+          ]
+        }
+      ],
+      "notices": [
+        "a notice to display to the user"
+      ]
+    }
+
+
+Servers **SHOULD** group multiple draft sessions based on normalized project
+name and version.
+
+
+Publish a Draft Session
+~~~~~~~~~~~~~~~~~~~~~~~
+
+After creating one or more draft sessions, and uploading all the files in those
+sessions, clients can indicate that those sessions are ready to be published.
+
+To determine which sessions are available for publication, the client lists all
+draft sessions (as described in 'List a Draft Session'), which includes unique
+session URLs.
+
+To publish a draft session, the client can issue a ``POST`` request to the
+session URL with no body.
+
+Publishing a session is a one-time action which cannot be undone. Once a
+session is published, the server should no longer consider the session to be a
+draft.
 
 
 Session Status
