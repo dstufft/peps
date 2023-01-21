@@ -1,0 +1,326 @@
+PEP: 9999
+Title: Creating the Packaging Steering Council
+Author: Donald Stufft <donald@stufft.io>
+Status: Draft
+Type: Process
+Content-Type: text/x-rst
+Created: 21-Jan-2023
+Replaces: 609
+
+
+.. todo:: Explicitly declare that projects within the PyPA are "owned" by
+          the PyPA, while the current maintainers are given large latitudes
+          to run them as they see fit, a PyPA project is still a PyPA project.
+
+.. todo:: Create a way for the maintainers of a project to request to the PkgSC
+          that they want to remove the project from the PyPA and take sole ownership
+          of it. This will be particularly important during some initial phase where
+          we give existing projects a chance to leave if they don't want to be
+          bound by the new process.
+
+.. todo:: Flesh out the PyPA Team Member section more
+
+.. todo:: Add a section on PyPA Projects, what it means to be one, etc.
+
+.. todo:: Is 5 council members too many? The PySC has 5, but they are likely pulling
+          from a larger candidate pool than we are. Maybe 3 is a better number? If we
+          go to 3 how do we handle forceful ejections?
+
+.. todo:: Currently individual terms on the council are multiple years, but staggered
+          so that only 1-2 seats are up at any one time. The idea is that this allows
+          fresh blood to come in, while still balancing a desire to have a consistent
+          experience that doesn't change year to year. The PySC is up for vote entirely
+          every ~year, which has worked well and is somewhat simpler to implement, should
+          we just do that?
+
+.. todo:: Figure out how to get this approved? Maybe a 3 person PEP-Delgate can do it
+          again, or we can just ask the SC to voteon it explicitly?
+
+.. todo:: Having 2 SCs is confusing, can we come up with a better name? Or maybe at least
+          better acronyms besides PkgSC and PySC?
+
+.. todo:: Should we only allow voting among the PyPA Team Members? Should we open it up to
+          "contributors" who might not be pypa team members or otherwise provide a way for
+          people who don't commit packaging code to have a say?
+
+.. todo:: Declare that the PySC delegates all pacakging / PyPA related questions to PkgSC,
+          including the long standing delegatations for pypi/interoptability PEPs. The PkgSC
+          can choose to re-delegate those decisions to the same people.
+
+.. todo:: Should we attempt to fold the packaging-wg into the PkgSC?
+
+.. todo:: Explicitly call out that this means that the PEP process can also be used for
+          single project decisions if needed (cf; PyPI)
+
+.. todo:: Explicitly call out that the PyPA is still operating under a mandate to make our
+          packaging tools work on well defined standards. Call out that we're not *required*
+          to make every change or feature work on an interoptability standard.
+
+.. todo:: Mention that one of the problems we currently have is that our only group decision
+          making process is interoptability standards, so there is a habit to try and
+          contort any decision into a standards based shape, even if it doesn't make sense
+          to do so.
+
+.. todo:: Call out that while the PkgSC is expected to operate on consensus, when consensus
+          can't be had, they get to ultimate make a decision.
+
+.. todo:: Call out packaging.python.org as an example of where we're currently failing to
+          create a good user experience.
+
+.. todo:: Do we need to be explicit about how things would work that require Core Python
+          buyin? See for example a hypothetical "ensurenewworkflowtool".
+
+
+Abstract
+========
+
+This PEP proposes the creation of a "Packaging Steering Council", who
+functions similiarly to that of the larger Python Steering Council, but
+within the specific remit of Python's ecosystem. In doing so, it revamps
+the governance model for the PyPA to provide for more explicit decision
+making and shepherding of the packaging ecosystem as a whole.
+
+
+Rationale
+=========
+
+Currently the PyPA is a loosely related collection of projects whose
+purpose is to implement the packaging story for the wider Python ecosystem.
+
+In :pep:`PEP 609`, the PyPA settled on using Python's PEP process for
+interoptability standards [#pypipeps]_, but otherwise leaves decision making
+for the overall direction of the ecosystem up to individual projects to
+make on their own. This largely enshrined the de facto processs into the
+de jure process, which has served us reasonably well both before and after
+the acceptable of :pep:`PEP 609`.
+
+However, while it works reasonably well for interoptability standards, it
+leaves the PyPA with no real mechanism to set the overall direction of the
+ecosystem or to make decisions about things that affect more than one project,
+but which is not an interoptability standard, and this gap in our process
+has been causing a number of issues for us [#statusquo]_, such as:
+
+- Inability to communicate to the community in anything resembling an
+  official capacity.
+- Inability or difficulty to decide on a "default" workflow tool
+- Inability or difficulty to reduce the inherent complexity in competing
+  solutions for new users
+- Inability to declare what workflows or use cases are in or out of scope
+  for our tooling.
+- Inability to focus contributions and efforts towards the places that
+  they would best serve the larger community [#contributions]_.
+
+All of these problems essentially come down to the fact that the packaging
+ecosystem in Python is like a very large ship, but instead of a captain at
+the helm, we have one team independently controlling the engines, another
+team independently controlling the anchor, and another team independently
+controlling the rudder, all with different ideas of the direction of the
+ship. While such a ship will eventually get somewhere, it's unlikely that
+it's going to get someplace that any of the individual teams or any of the
+passangers aboard actually wanted [#platypus]_.
+
+
+Specification
+=============
+
+
+The Packaging Steering Council
+------------------------------
+
+The steering council is a 5 person committee, whom act as the final say
+for questions within the PyPA remit.
+
+Mandate
+~~~~~~~
+
+Ultimately, the purpose of the steering council is to make decisions that
+impact the PyPA, both its members and its projects, and the wider community
+of users, both producers and consumers of packages, at large. It has broad
+discretion to make and enforce decisions on member projects, with the
+understanding that it will use those powers sparingly.
+
+The council is directed thus to:
+
+- Promote and maintain the quality of the PyPA tools and the overall experience
+  of interacting with packaging in the Python ecosystem.
+- Make contributing to the PyPA as accessible, inclusive, and sustainable as
+  possible.
+- Maintain the PyPA, handling new project inclusion and ensuring that existing
+  projects are following the decisions of the PyPA.
+- Seek consensus among the PyPA members, contributors, and the wider community
+  before acting in a formal capacity.
+- Act as a "court of appeal" for decisions where all other methods have
+  failed, as a last resort before kicking things up to the overall Python
+  steering council.
+
+
+Powers
+~~~~~~
+
+The council has broad authority to make decisions about the PyPA and it's member
+projects. For example they can:
+
+- Accept or reject Packaging PEPs
+- Manage PyPA projects, including admittance to or removal of a project to/from
+  the PyPA, or ownership of the projects within the PyPA.
+  projects.
+- Make official announcements, or otherwise speak for the PyPA project as a whole.
+- Enforce or update the Code of Conduct
+- Work with the PSF or the overall Python Steering Council to manage any assets.
+- Delegate parts of their authority to other subcomittees or processes.
+
+However, they cannot modify this PEP, or affect the membership of contributors
+within the PyPA, except via the mechanisms specified in this PEP.
+
+Like the overall steering council, the packaging council should look for ways to
+use these powers as little as reasonable, while still meeting the overall mandates
+that the council has.
+
+To use its powers, the council votes. Every council member must either vote or
+explicitly abstain. Members with conflicts of interest on a particular vote
+must abstain. Passing requires a strict majority of non-abstaining council
+members. If a strict majority is unable to be reached or if three or more council
+members abstain, then the issue is referred to the overall Python Steering
+Council.
+
+
+Electing the Council
+~~~~~~~~~~~~~~~~~~~~
+
+A council election consists of two phases, each lasting two weeks:
+
+- Phase 1: Candidates advertise their interest in serving. Candidates must be
+  nominated by a PyPA member. Self nominations are allowed.
+- Phase 2: Each PyPA member can vote for zero or more of the candidates. Voting
+  is perofrmed anonymously. Candidates are ranked by the total number of votes
+  they receive. If a tie occurs, it may be resolved by mutual agreement among
+  the candidates, or else the winner will be chosen at random.
+
+The election process is managed by a returns officer nominated by the overall
+Python steering council.
+
+
+Term
+~~~~
+
+A term on the council lasts for three years, each member's term runs from when
+their election results are finalized until their successor's term starts. There
+are no term limits.
+
+For the initial election, the 5 candidates will be ranked by order of total
+number of votes. The two candidates receiving the highest number of votes will
+serve a three year term, the next two candidates will serve a two year term,
+and the final candidate will serve a one year term.
+
+
+Vacancies
+~~~~~~~~~
+
+Council members may resign their position at any time.
+
+Whenever there is a vacancy for a term that still has 1 year or more left, then
+a new election will be held to select a candidate who will finish out that term.
+If there is less than a year left on the term, the council may ask the overall
+Python steering council to appoint a replacement to serve out the rest of the
+term.
+
+If there are multiple vacancies, then the vacancies with the longest amount of
+time left are filled by candidates with the most votes.
+
+If a council member drops out of touch and cannot be contacted for a month or
+longer, then the council may ask the overall Python steering council to vote
+to replace them.
+
+
+Ejecting PyPA Team Members
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In exceptional circumstances, it may be necessary to remove someone from the
+PyPA against their will (for example: egregious and ongoing Code of Conduct
+violations). This can be accomplished by a steering council vote, but unlike
+other steering council votes, this requires at least a two-third majority. With
+5 members voting, this means that a 3:2 vote is insufficient; 4:1 in favor is
+the minimum required for such a vote to succeed.
+
+In addition, this is the one power of the packaging steering council that
+cannot be delegated or referred to the overall Python steering council, and
+this power cannot be used while a vote of confidence is in process.
+
+If the ejected member is also on the packaging steering council, then they
+are removed from the steering council as well.
+
+
+Vote of no confidence
+~~~~~~~~~~~~~~~~~~~~~
+
+In exceptional circumstances, the PyPA members may remove a sitting council
+member, or the entire council, via a vote of no confidence.
+
+A no confidence vote is triggered when a PyPA member calls for one publically
+on an appropiate project communication channel, and another PyPA member seconds
+the proposal.
+
+A no confidence vote lasts for two weeks, and is run by a returns officer
+nominated by the overall Python steering committee, with PyPA members voting
+for or against. If at least two thirds of voters express a lack of confidence,
+then the vote succeeds.
+
+
+PyPA Team Members
+-----------------
+
+Role
+~~~~
+
+The PyPA team members are the group of trusted volunteers who manage PyPA
+projects. They assume may roles required to achieve the PyPA goals, especially
+those that require a high level of trust. They make the day to day decisions
+that shape the future of the PyPA and the projects operating under that banner.
+
+PyPA team members are expected to act as role models for the community and
+custodians of the PyPA and member projects, on behalf of the community and
+all those who rely on Python.
+
+The will intervene, where necessary, in online discussions or at official
+events on the rare occassion that a situation arises that requires
+intervention.
+
+They have authority over the PyPA infrastructure, including the websites,
+GitHub organizationsand repositories, bug trackers, mailing lists, IRC
+channels, discord servers, etc.
+
+
+
+
+Footnotes
+=========
+
+    .. [#pypipeps] An interesting note is that :pep:`PEP 609` never actually
+                   specifies that we'll use the PEP process for large PyPI
+                   changes, even though we certainly do!
+
+    .. [#statusquo] Pradyun has written down a number of issues that are
+                    currently hampering the PyPA in his excellent blog post:
+                    `Thoughts on the Python packaging ecosystem <https://pradyunsg.me/blog/2023/01/21/thoughts-on-python-packaging/>`__.
+
+    .. [#contributions] Obviously this is all still F/OSS, which means that
+                        nothing we do can *force* contributions to handle
+                        certain areas. However, we're currently in a situation
+                        where we have multiple competing projects, that compete
+                        largely on minor or inconsequential differences. This
+                        splits the contributor base up, and by being explicit
+                        about what the PyPA sees as the "golden path", we can
+                        influence where contributors are likely to spend their
+                        time.
+
+    .. [#platypus] We even jokingly wear this particular dysfunction as a point
+                   of pride and selected the Playpus, an animal that looks like
+                   it was designed by 3 different teams creating 3 different
+                   animals, as our unofficial mascot.
+
+
+Copyright
+=========
+
+This document is placed in the public domain or under the
+CC0-1.0-Universal license, whichever is more permissive.
