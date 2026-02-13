@@ -87,7 +87,9 @@ Magic Number
 ++++++++++++
 
 The first 10 bytes of a Wheel 2.0 file **MUST** contains the following
-values::
+values:
+
+.. code-block:: text
 
     (decimal)      173 80 89 87 72 76 13 10 26 10
     (hexadecimal)  AD 50 59 57 48 4C 0D 0A 1A 0A
@@ -121,7 +123,9 @@ Chunk Layout
 ++++++++++++
 
 Each chunk consists of four parts, Length, Chunk Type, Chunk Data, and Checksum,
-which is laid out in that order::
+which is laid out in that order:
+
+.. code-block:: text
 
     LENGTH TYPE DATA CHECKSUM
 
