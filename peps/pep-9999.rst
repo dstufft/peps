@@ -274,6 +274,48 @@ any particular position relative to other optional chunks.
 Rationale
 =========
 
+Custom File Format
+------------------
+
+A number of the issues with Wheel 1.0 are not issues related to Wheel 1.0
+itself, but rather are issues that have been inherited from the zip file format,
+which makes it difficult to actually fix those issues, limiting us to only being
+able to work around them. It can actually be impossible to avoid some of them,
+because the work around would ultimately be "don't use this feature", but of
+course a tool that is trying to read an arbitrary wheel file has no control over
+what features of zip that wheel has chosen to use or may require using a custom
+zip parser that allows access to the internals in ways most parsers do not.
+
+The zip format is a very general purpose format, which means that it includes a
+large amount of flexibility and features that are not relevant to this use case.
+It's also lead the zip format to make choices about trade offs that can make
+more sense in a general purpose format, but where those trade offs choices are
+worse for wheels.
+
+This zip format is also a very old format, nearly 40 years old, and the world
+looks very different than it did 40 years ago, which brings a lot of cruft in
+the zip format either to support scenarios that no longer exist or to bolt on
+support for something that the original design never could have imagined
+needing.
+
+Ultimately the things that we need from our format are simple enough that
+writing our own archive format is not a particularly large undertaking, and
+affords us the ability to make choices that are best for our particular use
+case. The majority of users who will be working with these files will be using
+one of a small handful of tools in a limited number of programming languages, so
+providing libraries for those tools in those languages is not a massive
+undertaking either.
+
+The biggest ongoing cost to using a custom format over zip is losing the ability
+to introspect and debug a wheel file with generic zip tools that are nearly
+universally available. This can be mitigated by providing our own tooling to do
+that, which may end up providing a nicer experience anyways, as we can tailor
+that tooling to our specific use cases.
+
+For more information on the issues around zip files, see
+`Appendix: Zip Format`_.
+
+
 Magic Number
 ------------
 
@@ -628,108 +670,228 @@ Acknowledgements
 Appendix: Zip Format
 ====================
 
-The existing wheel format is defined as a zip file, and an astute observer could
-notice that a number of the issues spelled out are not necessarily problems with
-the wheel format itself, but rather are problems that wheel inherits from zip.
+A basic explainer of the zip file format is that it contains a stream of zero or
+more file entries, each one containing a "local file header" and the actual file
+data. After all of the file entries is a "central record", which consists of a
+stream of zero or more "central directory records" and then ends with a "end of
+central directory record".
 
-The zip format is 36 years old, and like wheel the world is a vastly different
-place than when it was first created, and over the years it has also grown a
-large number of warts in an attempt to keep up with the world, and a lot (but
-not all) of the issues with zip stem from those warts.
+It roughly looks like:
 
-Without delving into the full zip file format, a rough idea of it is that it's
-basically a series of file records that consistent of ``HEADER + DATA + TRAILER``,
-with the ``HEADER`` containing metadata about the file (name, size, etc), ``DATA``
-containing the actual bytes of the file, and ``TRAILER`` also containing some
-duplicate metadata from ``HEADER`` (to support cases where that information
-isn't known in advance and you have to write the ``DATA`` to disk first).
+.. image:: pep-9999/ZIP-64_Internal_Layout.svg
+   :alt: An overview of the zip file structure, showing the multiple file
+         entries with related local header, and central directory with each
+         central directory record.
 
-After all of the file records, there's a "central record", which is basically an
-index of all of the files in the zip file, along with the information needed to
-locate the "real" file record that contains the data.
+It's not possible to unambigously determine whether a given file is a zip file
+or not, and different parsers will give different answers. This is because the
+only way to determine whether a file is a zip file, is to search backwards from
+the end of the file until you locate the magic byte sequence that identifies the
+"End of Central Directory" and go from there.
 
-The cannonical way to read a zip file is to seek backwards until you locate the
-magic bytes that indicate the end of the central record, and then read that to
-get the start of the central record, seek to there, and then read forwards again
-from that location to get an index of all of the files, and then use that index
-to jump to the correct file record and actually get the needed data.
+This can be easy in the common case where the magic byte sequence is 22 bytes
+away from the end of the file.
 
-This has some interesting properties that enables some neat (and sometimes
-useful) tricks. For example, a zip file tolerates an arbitrary amount of garbage
-prepended to it, which means you can create a self extracting zip file by
-prepending a binary that reads itself as a zip file and extracts itself.
+Unfortunately the End of Central Directory Record includes, as the last item in
+the record, a variable sized "comment" field which can store arbitrary bytes,
+including the same magic bytes that we're traversing backwards looking for, and
+since this comment field is variable sized, we don't know how far we actually
+need to traverse.
 
-Unfortunately this also has some very serious problems.
+The zip format
+`spec <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT>`__
+recommends not traversing more than 64k bytes, but does not require that, and
+different parsers have opted to place a different, or even no, limit on how far
+they will traverse.
 
-Arbitrary garbage can be prepended to your zip file, so that means you can
-create polyglot files that read as both a zip and something else (which is what
-the self extracting zip file does!) and use that to smuggle a malicious payload
-into contexts that it might otherwise not be able to get through.
+File streams are not setup to be easily read in reverse.
 
-One of the most fundamental aspects of pretty much any sort of data stream is
-the ability to read it from front to back, but it's much more rare to be able to
-read it backwards-- and generally involves having to make guesses about how big
-of a chunk you need to read in order to hopefully get the magic bytes that you
-need.
+In the ideal case you'll have the ability to seek randomly throughout the
+stream, but even then you have to guess where to seek to, and then read forwards
+from there and hope that the magic bytes are contained there, otherwise you'll
+need to jump further back and try again.
 
-To make matters worse, zip files support an "archive comment", which in theory
-is an unbounded length byte string that appears at the very end of the central
-record (i.e. the final bytes of the zip file are the comment). The zip format
-recommends that comments be limited to 64k bytes, so that acts as a sort of
-cap on the maximum number of bytes you need to read (but the spec doesn't
-*require* limiting it to 64k). Worse though, is that since the archive comment
-can be arbitrary bytes, you can put another zip file in those comments and try
-to confuse two different zip parsers around what zip file they're attempting
-to parse.
+In the less than ideal case, you'll only have the most basic stream
+functionality and you can only read the stream "in order", and if you want to
+re-read content that you've already seen you'll have to buffer it yourself.
 
-Zip files also have, at minimum, around 100 bytes of overhead per file stored
-to deal with all of the related metadata (not counting the actual contents of
-the filename and if there are any file comments). Aboout a third of that
-overhead is a complete duplicate of another third, just stored in different
-locations.
+Python's ``zipfile`` module will first seek to the end to get file size, then
+seek 22 bytes from the end of the file, and if that doesn't contain the magic
+bytes, will then seek 65557 bytes from the end of the file (or to the start of
+the file if it's less than that), and then read 65557 bytes and look for the
+magic bytes from there. It does not support streams that are not seekable.
 
-Zip files use fixed width integers everywhere, including for things like size
-of a file, which means that natively there's a limit on how large of a file can
-be stored in a zip. To address this, a standard "Zip64" extension was added
-which allows a larger set of fixed width integers, but comes at the cost of
-introducing two more duplicates of some of that existing data.
+Other parsers have different behaviors, including some parsers which will ignore
+the central directory altogether and read the zip file from front to back and
+rely only on the "local headers" (common for parsers that support streaming
+unzip).
 
-This duplication also means that the same data can be read from multiple places
-and if they disagree it's not clear which data is correct. Different parsers
-may end up selecting different sources of data to indicate what is correct.
+This makes it very easy to construct a zip file that contains very different
+content based on the specific parser that is being used to read it.
 
-The central record at the end of the file pointing back to locations earlier
-in the stream also means that you can have the same file represented multiple
-times in the stream, with only a single record in the central record or even
-no record. This allows you to update a file by emitting it a second (or third)
-time and only pointing the central record at the final one, or deleting a file
-by just omitting it from the central record.
+This "from the back" design of zip also means that, along with being able to
+add arbitrary bytes to the *end* of a zip file, you can also add arbitrary bytes
+to the *front* of a zip file. This can be a useful trick that is often used to
+implement things like a appending a zip file to a binary that extracts itself,
+or to Python that can add itself to ``sys.path`` and use zip imports.
 
-Which means that on top of garbage being able to be prepended and appended to a
-zip file, you can also just inject it in the middle as well, and yet another
-chance for a confused deputy style attack if parsers get confused.
+It also makes it really easy to create polyglot files (which is what the self
+extracting zip file is), which can be used by a malicous actor to smuggle files
+past security scanners or other checks that respond differently to different
+types of files.
 
-Compression in zip also only operates file by file, so you get a much worse
-compression ratio than if you compressed files as one large chunk in exchange
-for more efficient random access of files.
+Zip files also support the concept of updating or deleting a file that has
+already been written to the stream, without having to go back and rewrite the
+already written data, by abandoning the previously written data to be ignored
+and writing a duplicate file entry with the updated data and only refencing that
+duplicate file entry from the central directory (or omitting it from the central
+record for deletion). This made sense nearly 40 years ago when you might be
+writing a zip file that spanned across multiple floppy disks, where having to go
+back and restart the stream from the beginning could be an onerous ask.
 
-A lot of these behaviors make sense in the context of when zip was designed,
-nearly 40 years ago a zip file might have to span across multiple floppy disks,
-and if you were 10 disks in and realized a file in the first disk needed updated,
-it's a lot nicer to just keep going and update the central record than have to
-restart over and you can find all of the files from the central record on your
-last disk.
+In the modern world however, rewriting a zip file is typically reasonable, and
+this feature adds another way for parsers to arrive at different results from
+the same zip file (particularly streaming zip vs seekable zip).
 
-This 40 year history also means that there's a lot of cruft in the format.
-Timestamps are limited to 2 second resolution because 40 years ago MS-DOS
-timestamps were limited to 2 second resolution, some of the overhead is where
-the "disk number" is intended to be stored so you know what disk you need to
-insert to read a given file, etc.
+The zip file format also used fixed size integers throughout the spec, and due
+to its age, these fixed size integers are all 32bits or less, including for
+values like file size or relative offset to a file pointer, giving a zip file
+about a 4GB maximum size, as well as a 4GB maximum size for individual files in
+the zip, before and after compression. To allow larger sizes than that, there
+are "Zip64" records that can be added to a zip file, duplicating information
+from other parts of the zip file format, but with larger fixed size integers.
 
-Ultimately, the vast majority of what zip format gives us, isn't actually that
-useful or good. Where the zip format really shines for us is that you can use
-any old zip program to inspect a wheel and see what's inside it, debug it, etc.
+Zip files have about a minimum of 100 bytes of overhead per file added to the
+archive (in addition to any other overhead from the base zip format structure
+itself), and these Zip64 duplicate records adds another 64 bytes of possible
+overhead. Since these Zip64 records are duplicating information that exists
+elsehere, parsers that are not setup to read Zip64 can get different results
+from reading a zip file because they won't see the Zip64 records.
 
+The method used to extend the zip format for Zip64 is a generic method that
+allows adding extra "fields" of data to Zip records, and this mechanism is
+available for anyone who wants to extend the zip file format in some way, and
+was used by many different implementations to extend zip files or work around
+some issue with them.
+
+Of course support for these various extensions to the zip file format is not
+consistent among parsers, some of them are very commonly supported (such as
+Zip64) and others are essentially not supported. When a parser doesn't
+understand one of these extensions, there's no clear specification for what they
+should do, whther it's safe to ignore them or not. These extensions can also be
+repeated within the same entry, which may or may not make sense (it does not
+make sense for any of the known public extensions), with again, no guidance on
+what a parser should do in the face of repeated extensions.
+
+This all leads again to different parsers seeing different results from the same
+zip file.
+
+As an example, Python's ``zipfile`` supports only two of the extensions, Zip64
+and Unicode Filenames. It will silently ignore any unknown extensions (other
+than storing them for the end user to access them). When seeing the same
+extension repeated, it will use the *first* instance for the Zip64 extension,
+but the *last* instance for the Unicode Path extension. If the data that the
+Zip64 extension duplicates from the base zip format isn't set to a specific
+value (the max value for that field) it will silently ignore the Zip64
+extension.
+
+These extensions, given they are often trying to make up for an issue with the
+"base" zip file format, sometimes carry duplicate information from the base
+spec or even from each other. They can also be used repeatedly, even for cases
+where that doesn't make sense, and how a parser handles that also varies between
+the different parsers.
+
+This issue of the same data being duplicated occurs across several fields in
+zip files, and wherever it occurs it's not well specified which values should be
+considered authoritative, and in practice varies between parsers, giving
+different parsers different answers if that duplicated data isn't ensured to
+match up. For example, The "filename" for a single file can occur anywhere
+between 2 and 5 times (technically unbounded since that includes extensions that
+could be repeated) and different parsers are *known* to treat different sources
+authoritatively.
+
+Zip files support compression, but due to trade offs made this compression is
+only capable of compressing a single file at a time rather than multiple files
+together. Compressing files one at a time allows for more efficient random
+access of files, since you only need to decompress the bytes for the file you
+actually need, but means that your compression will be less efficient.
+
+Whether random access or higher compression ratios is more important will depend
+greatly on the use case, and there isn't a singular right answer for a general
+purpose file format, but single file compression conceptually fits into the
+design of zip better, so it chose that. For the Wheel use case however, random
+access isn't a particularly relevant feature to optimize since the majority of
+time you'll want the entire contents of the wheel, other than specifically for
+the ``METADATA`` file for resolvers.
+
+While zip files support compression for file data, they do *not* support
+compression for any of the overhead associated with the zip file format, even
+though this data would be highly compressible given how much of that overhead is
+storing duplicate copies of the same data.
+
+To top it off, given its age, the zip file format has more minor cruft spread
+all over it that, while it often isn't directly harmful, either adds overhead or
+has caused people to engineer workarounds that do end up being harmful. Some of
+that minor cruft is:
+
+* All of the timestamps in the base zip format are stored as MS-DOS time, which
+  only has a 2 second resolution and no timezone which also cannot represent
+  times before 1980. Several extensions have been added that include
+  duplications of these timestamps with varying levels of precision.
+* Every file record in the central directory uses 2 bytes to record which floppy
+  disk number the actual file data is stored on and the central directory stores
+  how many total disks this zip file spans. This has since been repurposed into
+  allowing splitting a zip file into multiple segments instead of across
+  multiple disks.
+* When splitting a zip file up, the spec says that PKZip will use a magic number
+  at offset 0, but does not require or mention if it is expected that other
+  implementations do that. They document that the magic number they've chosen
+  collides with magic bytes used by some implementations in other parts of a
+  zip file.
+* The zip file format has both a concept of the version needed to *extract* and
+  the version that *created* the zip file, some parsers will ignore this, others
+  will not.
+* The zip file format stores what OS and/or FS (it mixes the concepts) a zip
+  file was made on, based on a fixed list of both OSs and FSs.
+* There are "comment" fields throughout, which makes it very easy for even well
+  formed zip files to smuggle information around or create polyglot files.
+* One of the places data can be stored at uses 32 bit fixed integers, which
+  just automatically grow to support 64 bit integers if Zip64 is being used, but
+  Zip64 isn't a boolean so it's unclear how a parser is supposed to know.
+* One of the types of records is originally defined as not having any sort of
+  signature to identify it, but when it's used it **must** be used immediately
+  after the file data. It's documented in the spec that it's been common for
+  implementors to prefix that record with a set of magic bytes to identify it
+  (there by breaking the spec). The spec has now been updated to say that you
+  have to be able to handle both with and without the magic bytes, and you
+  should emit the magic bytes.
+* Zip files technically support many different kidns of compression, some of
+  which are specific to zip files and rarely are supported.
+* Zip files support encryption (and oddly compressing the central directory is
+  supported when encryption is in use).
+* Zip files have support for "patch files", where you can update a previous
+  file by saving a patch to that file rather than duplicating the entire stream,
+  but I'm not aware of anyone using it, and it has a note that the feature can
+  only be used by PKZip and is covered under patents.
+* Textual fields in Zip files are, by spec, encoded using cp437 (a hold over
+  from MS-DOS), however some implementations would write other encodings into
+  those fields. There are common extensions that can be used (duplicating the
+  data of course) to encode that same data using utf8 instead. The zip file
+  format has also grown a boolean flag to flip all textual fields in the file to
+  use utf8 encoding.
+* There's an extension field that has been "reserved" for indicating the
+  encoding of the filename specifically, but the spec has not indicated how that
+  field should actually be used and the field is explicitly undefined. The spec
+  also suggests that this field could be used somehow to specify the encoding of
+  the file itself as well as the decryption passsword.
+* There's various file attributes stored for every file that are specific to
+  MS-DOS or other older or no longer used systems.
+* Most of the extensions are used to store extended attributes that are relevant
+  only to a specific operating system or filesystem, some of which are not
+  portable between machines.
+* The zip spec recommends that any application specific manifest files be placed
+  as the first file in the zip file, but the Wheel 1.0 recommends it should be
+  the last file.
 
 
 Footnotes
