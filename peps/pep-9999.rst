@@ -44,7 +44,7 @@ Some of the issues that have surfaced over the years include:
   by relying on out of band information (such as content in the filename).
 * It's difficult to access the metadata that an installer might need to resolve
   a Wheel, without first downloading the entire wheel or relying on HTTP
-  features that may not be available _and_ implementation details of the wheel
+  features that may not be available *and* implementation details of the wheel
   generator.
 * Even in the best case, fetching the metadata from a wheel requires at least
   one (and commonly more than one) HTTP request and downloads lots of other
