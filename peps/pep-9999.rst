@@ -67,10 +67,6 @@ Some of the issues that have surfaced over the years include:
 
 And yet, Wheel still persists, largely unchanged.
 
-This PEP comes from taking a step back and taking a holistic view of the
-problems that Wheel has faced over the years, and how those problems could be
-solved from first principles.
-
 
 Specification
 =============
